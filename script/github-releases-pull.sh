@@ -54,10 +54,10 @@ prepare() {
 do_fetch() {
 	cd $2
 
-	curl -i https://api.github.com/repos/$1/releases -o $tempfile
+	wget --save-headers https://api.github.com/repos/$1/releases -O $tempfile
 	
-	if [ -z `cat $tempfile | grep "^Status: 2"` ] ; then
-		echo "$0: Repository not found!"
+	if [ $? -ne 0 ] ; then
+		echo "$0: Repository not found or GitHub unreachable!"
 		exit 1
 	fi
 	
