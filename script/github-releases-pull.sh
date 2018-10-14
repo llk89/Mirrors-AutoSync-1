@@ -5,11 +5,12 @@
 #
 # Author: Jinrui Wang <wangjr@shanghaitech.edu.cn>
 
+# TODO: Handle wget errors better
 # TODO: Prune removed releases
 # TODO: Provide switch whether fetch source tar balls
 
 fetch_page_content() {
-	if [ $PRE_RELEASE -eq 1 ] ; then 
+	if [ -n "$PRE_RELEASE" ] ; then 
 		grep "https://github.com/$1/releases/download/[^\"]+" $1 | xargs -n1 -t wget -nc
 	else 
 		grep "https://github.com/$1/releases/download/[^\"]+|((?<=prerelease\": )((true)|(false)))" -oP $1 \
@@ -71,6 +72,11 @@ do_fetch() {
 	until [ -z `cat $tempfile | grep rel=\"next\"` ] ; do
 		cat $tempfile | grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" | xargs curl -o $tempfile -i
 		fetch_page_content $tempfile $1
+		
+		while [ $? -ne 0 ] ; do
+			echo "$0: Retrying download!"
+			fetch_page_content $tempfile $1
+		done
 	done
 }
 
@@ -102,14 +108,21 @@ parse_arg() {
 
 parse_arg $*
 
-if [ -z $UPSTREAM ] && [ -z $TARGET ] ; then
-	if [ $LOCKED -eq 1 ] ; then
+if [ -n "$UPSTREAM" ] && [ -n "$TARGET" ] ; then
+	if [ -n "$LOCKED" ] ; then
 		do_fetch $*
 	else
 		prepare $*
-		flock -n $tempfile -c "$0 $* true" && rm $tempfile && exit 0
-		echo "$0: Lock contention or unknown error. Refer to above for error details. Aborting!"
-		exit 37
+		flock -n $tempfile -E 233 -c "$0 $* true"
+		ret=$?
+		if [ $ret -eq 233 ] ; then
+			echo "$0: Lock contention. Aborting!"
+			exit 37
+		elif [ $ret -ne 0 ] ; then 
+			exit $ret
+		else
+			exit 0
+		fi
 	fi
 else 
 	usage
