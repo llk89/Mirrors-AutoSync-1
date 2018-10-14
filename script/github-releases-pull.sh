@@ -10,25 +10,31 @@
 # TODO: Provide switch whether fetch source tar balls
 
 fetch_page_content() {
-	cat $1 | grep "https://github.com/$2/releases/download/[^\"]+"  -oP | xargs -n1 -t wget -nc
+	if [ $PRE_RELEASE -eq 1 ] ; then 
+		grep "https://github.com/$1/releases/download/[^\"]+" | xargs -n1 -t wget -nc
+	else 
+		grep "https://github.com/$1/releases/download/[^\"]+|((?<=prerelease\": )((true)|(false)))" -oP $1 \
+			| awk 'BEGIN{p=1}{if($1=="true"){p=0}else if($1=="false"){p=1}else if(p==1){print $1}}' \
+			| xargs -n1 -t wget -nc
+	fi
 }
 
 usage() {
 	echo "$0: Invalid argument(s)"
-	echo "Usage: $0 <owner/repo> <target> [locked]"
+	echo "Usage: $0 -u <owner/repo> -d <target> [--locked] [--pre-release] "
 	echo "Bash script to sync releases of a particular GitHub repository."
 	echo 
 	echo "ARGUMENTS:"
-	echo "    <owner/repo>      A string to indicate which repo to pull." 
-	echo "    <target>          The path to store the downloaded files locally." 
-	echo "    [locked]          Passing in anything indicate the lock is acquired." 
-	echo "                      Normally only used by the script itself."
+	echo "  -u,  --upstream=<owner/repo>  A string to indicate which repo to pull." 
+	echo "  -d,  --target=<target>        The path to store the downloaded files locally." 
+	echo "       --locked                 Passing in anything indicate the lock is acquired." 
+	echo "                                Normally only used by the script itself."
+	echo "       --pre-release            Fetch pre-releases. Default behavior is not fetch it." 
 	echo
 	echo "NOTICE:"
-	echo "    1. I would strongly oppose any action to parallelize the download, to prevent flooding GitHub servers, even if this is extremely unlikely."
-	echo "    2. WILL NOT DOWNLOAD SOURCE TAR BALLS."
-	echo "    3. WILL NOT PRUNE ALREADY DOWNLOADED RELEASES WHICH LATER GET DELETED IN REPO."
-	echo "    4. WILL FETCH PRE-RELEASES."
+	echo "     1. I would strongly oppose any action to parallelize the download, to prevent flooding GitHub servers, even if this is extremely unlikely."
+	echo "     2. WILL NOT DOWNLOAD SOURCE TAR BALLS."
+	echo "     3. WILL NOT PRUNE ALREADY DOWNLOADED RELEASES WHICH LATER GET DELETED IN REPO."
 	echo 
 	echo "AUTHOR"
 	echo "    Jinrui Wang <wangjr@shanghaitech.edu.cn>"
@@ -69,13 +75,43 @@ do_fetch() {
 	done
 }
 
-if [ $# -eq 2 ] ; then
-	prepare $*
-	flock -n $tempfile -c "$0 $* true" && rm $tempfile && exit 0
-	echo "$0: Lock contention or unknown error. Refer to above for error details. Aborting!"
-	exit 1
-elif [ $# -eq 3 ] ; then
-	do_fetch $*
+parse_arg() {
+	while [ $# -gt 0 ] ; do
+		case $1 in
+			-u|--upstream)
+				UPSTREAM=$2
+				shift 2
+				;;
+			-d|--target)
+				TARGET=$2
+				shift 2
+				;;
+			--locked)
+				LOCKED=1
+				shift 1
+				;;
+			--pre-release)
+				PRE_RELEASE=1
+				shift 1
+				;;
+			*)
+				usage
+				exit 1
+		esac
+	done
+}
+
+parse_arg $*
+
+if [ -z $UPSTREAM ] && [ -z $TARGET ] ; then
+	if [ $LOCKED -eq 1 ] ; then
+		do_fetch $*
+	else
+		prepare $*
+		flock -n $tempfile -c "$0 $* true" && rm $tempfile && exit 0
+		echo "$0: Lock contention or unknown error. Refer to above for error details. Aborting!"
+		exit 1
+	fi
 else 
 	usage
 	exit 1
