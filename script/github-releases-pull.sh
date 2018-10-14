@@ -6,7 +6,6 @@
 # Author: Jinrui Wang <wangjr@shanghaitech.edu.cn>
 
 # TODO: Prune removed releases
-# TODO: Provide switch whether fetch pre-releases
 # TODO: Provide switch whether fetch source tar balls
 
 fetch_page_content() {
