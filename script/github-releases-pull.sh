@@ -109,7 +109,7 @@ if [ -z $UPSTREAM ] && [ -z $TARGET ] ; then
 		prepare $*
 		flock -n $tempfile -c "$0 $* true" && rm $tempfile && exit 0
 		echo "$0: Lock contention or unknown error. Refer to above for error details. Aborting!"
-		exit 1
+		exit 37
 	fi
 else 
 	usage
