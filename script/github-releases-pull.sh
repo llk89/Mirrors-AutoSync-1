@@ -11,7 +11,7 @@
 
 fetch_page_content() {
 	if [ $PRE_RELEASE -eq 1 ] ; then 
-		grep "https://github.com/$1/releases/download/[^\"]+" | xargs -n1 -t wget -nc
+		grep "https://github.com/$1/releases/download/[^\"]+" $1 | xargs -n1 -t wget -nc
 	else 
 		grep "https://github.com/$1/releases/download/[^\"]+|((?<=prerelease\": )((true)|(false)))" -oP $1 \
 			| awk 'BEGIN{p=1}{if($1=="true"){p=0}else if($1=="false"){p=1}else if(p==1){print $1}}' \
