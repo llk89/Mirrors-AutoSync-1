@@ -11,7 +11,6 @@
 
 fetch_page_content() {
 	cat $1 | grep "https://github.com/$2/releases/download/[^\"]+"  -oP | xargs -n1 -t wget -nc
-	exit 0
 }
 
 usage() {
@@ -56,6 +55,12 @@ do_fetch() {
 	cd $2
 
 	curl -i https://api.github.com/repos/$1/releases -o $tempfile
+	
+	if [ -z `cat $tempfile | grep "^Status: 2"` ] ; then
+		echo "$0: Repository not found!"
+		exit 1
+	fi
+	
 	fetch_page_content $tempfile $1
 
 	until [ -z `cat $tempfile | grep rel=\"next\"` ] ; do
