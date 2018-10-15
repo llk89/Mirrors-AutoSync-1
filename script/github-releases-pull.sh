@@ -21,16 +21,6 @@
 # TODO: Prune removed releases
 # TODO: Provide switch whether fetch source tar balls
 
-fetch_page_content() {
-	if [ -n "$PRE_RELEASE" ] ; then 
-		grep "https://github.com/$1/releases/download/[^\"]+" $1 | xargs -n1 -t wget -nc
-	else 
-		grep "https://github.com/$1/releases/download/[^\"]+|((?<=prerelease\": )((true)|(false)))" -oP $1 \
-			| awk 'BEGIN{p=1}{if($1=="true"){p=0}else if($1=="false"){p=1}else if(p==1){print $1}}' \
-			| xargs -n1 -t wget -nc
-	fi
-}
-
 usage() {
 	cat<<EOF
 $0: Invalid argument(s)
@@ -58,10 +48,8 @@ EOF
 	exit 1
 }
 
-tempfile=$2/.github-releases-pull.${1//\//@}.lock
-
 prepare() {
-	mkdir -p $2
+	mkdir -p $TARGET
 	if [ $? -ne 0 ] ; then
 		echo "$0: Unable to create directories. Refer to above for error details. Aborting!"
 		exit 1
@@ -74,25 +62,35 @@ prepare() {
 	fi
 }
 
-do_fetch() {
-	cd $2
+fetch_page_content() {
+	if [ -n "$PRE_RELEASE" ] ; then 
+		grep "https://github.com/$2/releases/download/[^\"]+" $1 | xargs -n1 -t wget -nc
+	else 
+		grep "https://github.com/$2/releases/download/[^\"]+|((?<=prerelease\": )((true)|(false)))" -oP $1 \
+			| awk 'BEGIN{p=1}{if($1=="true"){p=0}else if($1=="false"){p=1}else if(p==1){print $1}}' \
+			| xargs -n1 -t wget -nc
+	fi
+}
 
-	wget --save-headers https://api.github.com/repos/$1/releases -O $tempfile
+do_fetch() {
+	cd $TARGET
+
+	wget --save-headers https://api.github.com/repos/$UPSTREAM/releases -O $tempfile
 	
 	if [ $? -ne 0 ] ; then
 		echo "$0: Repository not found or GitHub unreachable!"
 		exit 1
 	fi
 	
-	fetch_page_content $tempfile $1
+	fetch_page_content $tempfile $UPSTREAM
 
-	until [ -z "`grep rel=\"next\" $tempfile`" ] ; do
-		grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" $tempfile | xargs curl -o $tempfile -i
-		fetch_page_content $tempfile $1
+	while [ -z "`grep rel=\"next\" $tempfile`" ] ; do
+		grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" $tempfile | xargs wget --save-headers -O $tempfile -i
+		fetch_page_content $tempfile $UPSTREAM
 		
 		while [ $? -ne 0 ] ; do
 			echo "$0: Retrying download!"
-			fetch_page_content $tempfile $1
+			fetch_page_content $tempfile $UPSTREAM
 		done
 	done
 }
@@ -125,12 +123,14 @@ parse_arg() {
 
 parse_arg $*
 
+tempfile=$TARGET/.github-releases-pull.${UPSTREAM//\//@}.lock
+
 if [ -n "$UPSTREAM" ] && [ -n "$TARGET" ] ; then
 	if [ -n "$LOCKED" ] ; then
-		do_fetch $*
+		do_fetch
 	else
-		prepare $*
-		flock -n $tempfile -E 233 -c "$0 $* true"
+		prepare
+		flock -n $tempfile -E 233 -c "$0 $* --locked"
 		ret=$?
 		if [ $ret -eq 233 ] ; then
 			echo "$0: Lock contention. Aborting!"
