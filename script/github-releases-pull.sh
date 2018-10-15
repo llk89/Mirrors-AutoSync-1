@@ -3,7 +3,19 @@
 # WILL NOT DOWNLOAD SOURCE TAR BALLS
 # WILL NOT PRUNE ALREADY DOWNLOADED RELEASES WHICH LATER GET DELETED IN REPO
 #
-# Author: Jinrui Wang <wangjr@shanghaitech.edu.cn>
+# Copyright (C) 2018 Jinrui Wang <wangjr@shanghaitech.edu.cn>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, version 3.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+# 
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # TODO: Handle wget errors better
 # TODO: Prune removed releases
@@ -20,25 +32,30 @@ fetch_page_content() {
 }
 
 usage() {
-	echo "$0: Invalid argument(s)"
-	echo "Usage: $0 -u <owner/repo> -d <target> [--locked] [--pre-release] "
-	echo "Bash script to sync releases of a particular GitHub repository."
-	echo 
-	echo "ARGUMENTS:"
-	echo "  -u,  --upstream=<owner/repo>  A string to indicate which repo to pull." 
-	echo "  -d,  --target=<target>        The path to store the downloaded files locally." 
-	echo "       --locked                 Passing in anything indicate the lock is acquired." 
-	echo "                                Normally only used by the script itself."
-	echo "       --pre-release            Fetch pre-releases. Default behavior is not fetch it." 
-	echo
-	echo "NOTICE:"
-	echo "     1. I would strongly oppose any action to parallelize the download, to prevent flooding GitHub servers, even if this is extremely unlikely."
-	echo "     2. WILL NOT DOWNLOAD SOURCE TAR BALLS."
-	echo "     3. WILL NOT PRUNE ALREADY DOWNLOADED RELEASES WHICH LATER GET DELETED IN REPO."
-	echo 
-	echo "AUTHOR"
-	echo "    Jinrui Wang <wangjr@shanghaitech.edu.cn>"
-	echo 
+	cat<<EOF
+$0: Invalid argument(s)
+Usage: $0 -u <owner/repo> -d <target> [--locked] [--pre-release]
+Bash script to sync releases of a particular GitHub repository.
+
+ARGUMENTS:
+  -u,  --upstream=<owner/repo>  A string to indicate which repo to pull. 
+  -d,  --target=<target>        The path to store the downloaded files locally. 
+       --locked                 Passing in anything indicate the lock is acquired. 
+                                Normally only used by the script itself.
+       --pre-release            Fetch pre-releases. Default behavior is not fetch it. 
+
+NOTICE:
+     1. I would strongly oppose any action to parallelize the download, to prevent flooding GitHub servers, even if this is extremely unlikely.
+     2. WILL NOT DOWNLOAD SOURCE TAR BALLS.
+     3. WILL NOT PRUNE ALREADY DOWNLOADED RELEASES WHICH LATER GET DELETED IN REPO.
+
+LICENSING
+     Licensed under AGPL v3.0.
+
+AUTHOR
+    Jinrui Wang <wangjr@shanghaitech.edu.cn>
+EOF
+	exit 1
 }
 
 tempfile=$2/.github-releases-pull.${1//\//@}.lock
@@ -69,8 +86,8 @@ do_fetch() {
 	
 	fetch_page_content $tempfile $1
 
-	until [ -z `cat $tempfile | grep rel=\"next\"` ] ; do
-		cat $tempfile | grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" | xargs curl -o $tempfile -i
+	until [ -z "`grep rel=\"next\" $tempfile`" ] ; do
+		grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" $tempfile | xargs curl -o $tempfile -i
 		fetch_page_content $tempfile $1
 		
 		while [ $? -ne 0 ] ; do
@@ -101,7 +118,7 @@ parse_arg() {
 				;;
 			*)
 				usage
-				exit 1
+				;;
 		esac
 	done
 }
@@ -126,5 +143,4 @@ if [ -n "$UPSTREAM" ] && [ -n "$TARGET" ] ; then
 	fi
 else 
 	usage
-	exit 1
 fi
