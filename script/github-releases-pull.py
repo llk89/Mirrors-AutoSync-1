@@ -19,7 +19,7 @@ statuscode = os.system(command) >> 8
 
 writer(Name, ConfigPath, StatusPath, statuscode)
 
-if statuscode != 0 && statuscode != 37:
+if statuscode != 0 and statuscode != 37:
 	print("	[{}] failed with error code {}."
 				.format(Name, statuscode))
 	exit(233)
