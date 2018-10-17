@@ -20,6 +20,7 @@
 # TODO: Handle wget errors better
 # TODO: Prune removed releases
 # TODO: Provide switch whether fetch source tar balls
+# TODO: Provide download statistics
 
 usage() {
 	cat<<EOF
@@ -55,7 +56,7 @@ prepare() {
 		exit 1
 	fi
 
-	touch $tempfile
+	touch $LOCK_FILE
 	if [ $? -ne 0 ] ; then
 		echo "$0: Unable to write to lock file. Refer to above for error details. Aborting!"
 		exit 1
@@ -64,11 +65,11 @@ prepare() {
 
 fetch_page_content() {
 	if [ -n "$PRE_RELEASE" ] ; then 
-		grep "https://github.com/$2/releases/download/[^\"]+" $1 | xargs -n1 -t wget -nc
+		grep "https://github.com/$2/releases/download/[^\"]+" $1 | xargs -r -n1 -t wget -nc
 	else 
 		grep "https://github.com/$2/releases/download/[^\"]+|((?<=prerelease\": )((true)|(false)))" -oP $1 \
 			| awk 'BEGIN{p=1}{if($1=="true"){p=0}else if($1=="false"){p=1}else if(p==1){print $1}}' \
-			| xargs -n1 -t wget -nc
+			| xargs -r -n1 -t wget -nc
 	fi
 }
 
@@ -84,12 +85,14 @@ do_fetch() {
 	
 	fetch_page_content $tempfile $UPSTREAM
 
-	while [ -z "`grep rel=\"next\" $tempfile`" ] ; do
-		grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" $tempfile | xargs wget --save-headers -O $tempfile -i
+	while [ -n "$(grep -o rel=\"next\" $tempfile)" ] ; do
+		grep -oP "https://api.github.com/repositories/\\d+/releases\\?page=\\d+(?=>; rel=\"next\")" $tempfile | xargs wget --save-headers -O $tempfile 
 		fetch_page_content $tempfile $UPSTREAM
 		
 		while [ $? -ne 0 ] ; do
-			echo "$0: Retrying download!"
+			echo "$0: Retrying download after 5 seconds!"
+			sleep 5
+			echo "$0: Retrying!"
 			fetch_page_content $tempfile $UPSTREAM
 		done
 	done
@@ -123,14 +126,14 @@ parse_arg() {
 
 parse_arg $*
 
-tempfile=$TARGET/.github-releases-pull.${UPSTREAM//\//@}.lock
+LOCK_FILE=$TARGET/.github-releases-pull.${UPSTREAM//\//@}.lock
 
 if [ -n "$UPSTREAM" ] && [ -n "$TARGET" ] ; then
 	if [ -n "$LOCKED" ] ; then
-		do_fetch
+		tempfile=`mktemp -p "" github-releases-pull.index.XXXXXX` && { do_fetch; }
 	else
 		prepare
-		flock -n $tempfile -E 233 -c "$0 $* --locked"
+		flock -E233 -n "$LOCK_FILE" -c "$0 $* --locked"
 		ret=$?
 		if [ $ret -eq 233 ] ; then
 			echo "$0: Lock contention. Aborting!"
@@ -144,3 +147,4 @@ if [ -n "$UPSTREAM" ] && [ -n "$TARGET" ] ; then
 else 
 	usage
 fi
+
